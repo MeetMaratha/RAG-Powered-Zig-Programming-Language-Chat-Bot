@@ -1,0 +1,3 @@
+[submodule "zig-documentation-crawler"]
+	path = zig-documentation-crawler
+	url = git@github.com:MeetMaratha/zig-documentation-crawler.git
