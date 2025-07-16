@@ -1,0 +1,102 @@
+services:
+  chunker-function:
+    build: ./chunker-function
+    container_name: chunker-function
+    depends_on:
+      elasticmq-create-queue:
+        condition: service_started
+
+  make-chunker-function-event-driven:
+    build: ./make-chunker-function-event-driven
+    container_name: make-chunker-function-event-driven
+    depends_on:
+      chunker-function:
+        condition: service_started
+    volumes:
+      - /home/M3/Documents/Codes/Github/zig-documentation-crawler/zig-documentations:/usr/src/app/zig-documentations
+
+  elasticmq:
+    image: softwaremill/elasticmq-native
+    container_name: elastic-mq
+    ports: 
+      - "9324:9324"
+      - "9325:9325"
+  
+  elasticmq-create-queue:
+    build: ./create-sqs-queue
+    container_name: elasticmq-create-queue
+    depends_on:
+      elasticmq:
+        condition: service_started
+
+  chroma-db-storer:
+    build: ./chroma-db-storer
+    container_name: chroma-db-storer
+    depends_on:
+      elasticmq-create-queue:
+        condition: service_started
+    volumes:
+      - /home/M3/Documents/Codes/Github/mid-term-project/ChromaDB:/usr/src/app/ChromaDB
+
+  chroma-db-fetcher:
+    build: ./chroma-db-fetcher
+    container_name: chroma-db-fetcher
+    ports:
+      - "8000:8000"
+    volumes:
+      - /home/M3/Documents/Codes/Github/mid-term-project/ChromaDB:/usr/src/app/ChromaDB
+
+  make-inference-queue-request:
+    build: ./make-inference-queue-request
+    container_name: make-inference-queue-request
+    depends_on: 
+      elasticmq-create-queue:
+        condition: service_started
+    ports:
+      - "8002:8080"
+  
+  make-generate-response-event-driven:
+    build: ./make-generate-response-event-driven
+    container_name: make-generate-response-event-driven
+    depends_on:
+      elasticmq-create-queue:
+        condition: service_started
+
+  generate-response:
+    build: ./generate-response
+    container_name: generate-response
+    depends_on:
+      chroma-db-fetcher:
+        condition: service_started
+      inference-model:
+        condition: service_started
+      dynamodb-table-created:
+        condition: service_started
+      make-generate-response-event-driven:
+        condition: service_started
+
+  dynamo-db:
+    image: amazon/dynamodb-local
+    container_name: dynamo-db
+    ports:
+      - "8003:8000"
+
+  dynamodb-table-created:
+    build: ./create-dynamodb-table
+    container_name: create-dynamo-db-table
+    depends_on:
+      dynamo-db:
+        condition: service_started
+
+  inference-model:
+    build: ./inference-model
+    container_name: inference-model
+
+  check-dynamodb:
+    build: ./check-dynamodb
+    container_name: check-dynamo-db
+    ports:
+      - "8004:8080"
+    depends_on:
+      dynamodb-table-created:
+        condition: service_completed_successfully
